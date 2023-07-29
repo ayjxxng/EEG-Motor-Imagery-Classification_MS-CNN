@@ -1,8 +1,6 @@
-import os
 import numpy as np
 import scipy.io
 from scipy.signal import butter, lfilter
-import re
 from neurodsp.filt import filter_signal
 
 
