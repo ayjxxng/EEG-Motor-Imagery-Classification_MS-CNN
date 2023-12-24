@@ -2,6 +2,7 @@ import os
 import numpy as np
 import scipy.io
 import re
+from preprocessing import extract_bands, mat_extractor
 
 def load_data(data_file_dir):
     data_files = os.listdir(data_file_dir)
