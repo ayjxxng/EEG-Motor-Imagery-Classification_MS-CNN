@@ -1,5 +1,6 @@
 # EEG-Motor-Imagery-Classification_MS-CNN
-
+Multi-scale CNN for MI-BCI classification. 
+This repository belongs to the Neuromatch project of NewLearn (Neuroscience Society of Korea University).
 
 ## Dataset
 The dataset we used is [BCI Competition IV 2b](https://www.bbci.de/competition/iv/). 
