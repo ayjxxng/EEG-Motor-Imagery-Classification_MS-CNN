@@ -1,28 +1,22 @@
-import numpy as np
-from sklearn.model_selection import KFold
 import tensorflow as tf
-from tensorflow.keras.layers import Input, Dense, Conv1D, Conv2D, MaxPooling2D, Concatenate, Flatten, Softmax
-from tensorflow.keras.models import Model
-from tensorflow.python.util.tf_export import keras_export
-from keras import optimizers, losses, activations, models
-from keras.layers import Dense, Input, Dropout, Flatten, concatenate, Bidirectional
-from tensorflow.keras.optimizers import SGD
-from tensorflow.keras.callbacks import LearningRateScheduler
-from tensorflow.keras.utils import to_categorical
+from keras.models import Model
+from keras.layers import Dense, Input, Dropout, Flatten, Conv1D, Conv2D, MaxPooling2D, Concatenate
+from keras.optimizers import SGD
 
-def MSCBBlock(input_tensor):
 
-    block1 = Conv2D(filters=14, kernel_size=(1, 5), strides=1, padding='same', activation='relu')(input_tensor)
+def MSCBBlock(block_input):
+
+    block1 = Conv2D(filters=14, kernel_size=(1, 5), strides=1, padding='same', activation='relu')(block_input)
     block1 = MaxPooling2D(pool_size=(1, 5), strides=(1, 5), padding='same')(block1)
 
-    block2 = Conv2D(filters=14, kernel_size=(1, 3), strides=1, padding='same', activation='relu')(input_tensor)
+    block2 = Conv2D(filters=14, kernel_size=(1, 3), strides=1, padding='same', activation='relu')(block_input)
     block2 = MaxPooling2D(pool_size=(1, 3), strides=(1, 5), padding='same')(block2)
 
-    block3 = Conv2D(filters=14, kernel_size=(1, 1), strides=1, padding='same', activation='relu')(input_tensor)
+    block3 = Conv2D(filters=14, kernel_size=(1, 1), strides=1, padding='same', activation='relu')(block_input)
     block3 = MaxPooling2D(pool_size=(1, 1), strides=(1, 5), padding='same')(block3)
 
-    block4 = MaxPooling2D(pool_size=(1, 3), strides=(1, 5), padding='same')(input_tensor)
-    block4 = Conv2D(filters=24, kernel_size=(1, 3), strides=1, padding='same', activation='relu')(block4)
+    block4 = MaxPooling2D(pool_size=(1, 3), strides=(1, 5), padding='same')(block_input)
+    block4 = Conv2D(filters=14, kernel_size=(1,3), strides=1, padding='same', activation='relu')(block4)
 
     all_blocks = [block1, block2, block3, block4]
     MSCB_out = Concatenate(axis=-1)(all_blocks)
@@ -30,75 +24,60 @@ def MSCBBlock(input_tensor):
     return MSCB_out
 
 
-data = output
+def build_model_3():
 
-labels = yy
+    initial_lr = 0.1
 
-# cross-validation 
-n_folds = 10
+    lr_schedule = tf.keras.optimizers.schedules.ExponentialDecay(
+        initial_lr,
+        decay_steps=100,
+        decay_rate=0.96,
+        staircase=True
+        )
 
-# batch_size 
-batch_size = 32
+    # Apply MSCBBlock to each band
+    concatenated_outputs = []
 
-accuracies = []
+    input_tensor = Input(shape=(3, 1000, 4))
+    DE_input_tensor = Input(shape=(3, 8, 4))
+    NPS_input_tensor = Input(shape=(3, 6, 4))
 
-kf = KFold(n_splits=n_folds, shuffle=True)
+    for i in range(4):
+        input = input_tensor[:, :, :, i]
+        block_input = tf.expand_dims(input, axis=-1)
+        band_output = MSCBBlock(block_input)
+        band_output = Conv2D(filters=112, kernel_size=(1, 3), strides=(1, 1), padding='same', activation='relu')(band_output)
+        band_output = MaxPooling2D(pool_size=(1, 5), strides=(1, 5), padding='same')(band_output)
 
-labels = np.array(labels).flatten()
-labels -= 1
-labels = to_categorical(labels, num_classes=2)
+        for j in range(3):
+            DE_input = DE_input_tensor[:, j, :, i]
+            DE_input_expanded = tf.expand_dims(DE_input, axis=-1)
+            Conv_DE = Conv1D(filters=112, kernel_size=1, activation='relu')(DE_input_expanded)
+            NPS_input = NPS_input_tensor[:, j, :, i]
+            NPS_input_expanded = tf.expand_dims(NPS_input, axis=-1)
+            Con_NPS = Conv1D(filters=112, kernel_size=1, activation='relu')(NPS_input_expanded)
 
-# learning_rate 설정한 것
-initial_lr = 0.01
-decay_rate = 0.8
+            band_output_j = band_output[:, j, :, :]
+            band_flattend = Flatten()(band_output_j)
+            DE_flattened = Flatten()(Conv_DE)
+            NPS_flattened = Flatten()(Con_NPS)
 
-def lr_scheduler(epoch, lr):
-    return lr * decay_rate
+            concat = Concatenate()([band_flattend , DE_flattened, NPS_flattened])
+            concatenated_outputs.append(concat)
 
-input_tensors = []
+    concatenated_output = Concatenate()(concatenated_outputs)
 
-# Apply MSCBBlock to each band
-band_outputs = []
-for i in range(4):
+    # Add a fully connected layer for classification
+    output_layer = Dense(400, activation='relu', kernel_regularizer=l2(0.02))(concatenated_output)
+    output_layer = Dropout(0.5)(output_layer)
 
-    input_tensor = Input(shape=(3, 1000, 1))
-    input_tensors.append(input_tensor)
+    # Final classification layer
+    output_layer = Dense(300, activation='relu')(output_layer)
+    output_layer = Dense(2, activation='softmax')(output_layer)
 
-    band_output = MSCBBlock(input_tensor)
+    # Create the final model
+    model_3 = Model(inputs=[input_tensor, DE_input_tensor, NPS_input_tensor], outputs=output_layer)
 
-    band_output = Conv2D(filters=112, kernel_size=(1,3), strides=1, padding='same', activation='relu')(band_output)
-    band_output = MaxPooling2D(pool_size=(1,2), strides=(1,5), padding='same')(band_output)
-
-    band_output = Flatten()(band_output)
-    band_outputs.append(band_output)
-
-# Concatenate the outputs from MSCBBlock for each band
-concatenated_output = Concatenate()(band_outputs)
-
-# Add a fully connected layer for classification
-output_layer = Dense(128, activation='relu')(concatenated_output)
-
-# Final classification layer
-output_layer = Dense(2, activation='softmax')(output_layer)
-
-# Create the final model
-model = Model(inputs=input_tensors, outputs=output_layer)
-
-optimizer = SGD(learning_rate=initial_lr)
-model.compile(loss='categorical_crossentropy', optimizer=optimizer, metrics=['accuracy'])
-
-for fold, (train_index, test_index) in enumerate(kf.split(data)):
-    print(f"Fold: {fold+1}")
-
-    x_train, x_test = data[train_index], data[test_index]
-    y_train, y_test = labels[train_index], labels[test_index]
-
-    model.fit([x_train[:, i] for i in range(4)], y_train, batch_size=batch_size, epochs=500, verbose=1, callbacks=[LearningRateScheduler(lr_scheduler)])
-
-    _, accuracy = model.evaluate([x_test[:, i] for i in range(4)], y_test, verbose=0)
-    print(f"Accuracy for Fold {fold+1}: {accuracy}")
-
-    accuracies.append(accuracy)
-
-avg_accuracy = np.mean(accuracies)
-print(f"Average accuracy: {avg_accuracy}")
+    optimizer = SGD(learning_rate=lr_schedule)
+    model_3.compile(loss='binary_crossentropy', optimizer=optimizer, metrics=['accuracy'])
+    return model_3
