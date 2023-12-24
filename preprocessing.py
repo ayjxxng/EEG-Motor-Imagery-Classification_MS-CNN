@@ -4,19 +4,21 @@ from scipy.signal import butter, lfilter
 from neurodsp.filt import filter_signal
 
 
-def butter_bandpass(lowcut, highcut, fs, order=6):
-    nyq = 0.5 * fs
-    low = lowcut / nyq
-    high = highcut / nyq
+def butter_bandpass_filter (signal, lowcut, highcut, fs, order=4):
+    nyquist = 0.5 * fs
+    low = lowcut / nyquist
+    high = highcut / nyquist
     b, a = butter(order, [low, high], btype='band')
-    return b, a
-
-
-def butter_bandpass_filter(signal, lowcut, highcut, fs, order=6):
-    b, a = butter_bandpass(lowcut, highcut, fs, order=order)
-    y = lfilter(b, a, signal)
+    y = filtfilt(b, a, signal)
     return y
 
+def butter_bandstop_filter(signal, sfreq, notch_freq=50, notch_width=0.1, order=4):
+    nyq = 0.5 * sfreq
+    low = (notch_freq - notch_width) / nyq
+    high = (notch_freq + notch_width) / nyq
+    i, u = butter(order, [low, high], btype='bandstop')
+    y = filtfilt(i, u, signal)
+    return y
 
 def linear_interpolation(data):
     num_channels = data.shape[1]
@@ -36,8 +38,7 @@ def linear_interpolation(data):
 
     return interpolated_data
 
-
-def eog_remove(signal, eeg_ch=3, eog_ch=3):
+def eog_remove (signal, eeg_ch=3, eog_ch=3):
     '''
     function for removing EOG artifact
     based on *** ref ****
@@ -48,24 +49,24 @@ def eog_remove(signal, eeg_ch=3, eog_ch=3):
             and T is the number of time samples
     '''
 
-    Y = signal[:-eog_ch, :]  # received by EEG sensors
-    N = signal[-eog_ch:, :]  # EOG singal (noise)
+    Y = signal[:-eog_ch, :] # received by EEG sensors
+    N = signal[-eog_ch:, :] # EOG singal (noise)
 
     autoN = np.cov(N)
     covNY = np.zeros((eog_ch, eeg_ch))
 
     for i in range(eog_ch):
         for j in range(eeg_ch):
-            cov = np.cov(N[i:i + 1, :], Y[j:j + 1, :])
-            covNY[i, j] = cov[0, 1]
+            cov   = np.cov(N[i:i+1, :], Y[j:j+1, :])
+            covNY[i,j] = cov[0, 1]
 
     b = np.linalg.inv(autoN).dot(covNY)
     return b
 
 
 def mat_extractor(
-        mat_file_name, data_type, remove_eog=True,
-        bpf_dict={'apply': True, 'fs': 250, 'lc': 1, 'hc': 30, 'order': 6},
+        mat_file_name, remove_eog=False,
+        bpf_dict={'apply': True, 'fs': 250, 'lc': 0.5, 'hc': 100, 'order': 4},
         channel_norm=True
 ):
     '''
@@ -98,11 +99,6 @@ def mat_extractor(
     s = mat_file['s']
     signal = np.array(s)
 
-    if data_type == 'T':
-        dey = 0
-    else:
-        dey = 125
-
     xx = np.empty([n_trials, 3, 1000])  # signals
     yy = np.empty([n_trials])  # labels
 
@@ -116,12 +112,13 @@ def mat_extractor(
         b = eog_remove(allsig)
 
     for i in range(n_trials):
-        x = signal[trials[i][0] + dey: trials[i][0] + dey + 1000, :]
+        x = signal[trials[i][0] + 125 : trials[i][0] + 125 + 1000, :]
         x = linear_interpolation(x)
+
         if remove_eog:
             x = (x[:, 0: -3] - x[:, -3: x.shape[1] + 1].dot(b)).T
         else:
-            x = x[:, 0: -3]
+            x = x[:, 0: -3].T
 
         if bpf_dict['apply']:
             x = butter_bandpass_filter(
@@ -131,8 +128,11 @@ def mat_extractor(
                 fs=bpf_dict['fs'],
                 order=bpf_dict['order']
             )
+            x = butter_bandstop_filter(signal=x, sfreq=250, notch_freq=50,
+                                       notch_width=0.1, order=4)
         if channel_norm:
             x = (x - np.mean(x)) / np.std(x)
+
         yy[i] = classlabel[i]
         xx[i, :, :] = x
 
@@ -141,23 +141,23 @@ def mat_extractor(
 
 def extract_bands(xx):
     '''
-  xx={trials x channels X signals}
-  '''
+    xx={trials x channels X signals}
+    '''
     trials = xx.shape[0]
     channels = xx.shape[1]
     signals = xx.shape[2]
-    extracted_sig = np.zeros((trials, 4, channels, signals))
-    s_rate = 250
+    extracted_sig = np.zeros((trials, channels, 4, signals))
+    fs = 250
 
     for i in range(trials):
         for j in range(channels):
-            band_sig_delta = filter_signal(xx[i][j], s_rate, 'bandpass', [1, 4], remove_edges=False)
-            band_sig_theta = filter_signal(xx[i][j], s_rate, 'bandpass', [4, 8], remove_edges=False)
-            band_sig_alpha = filter_signal(xx[i][j], s_rate, 'bandpass', [8, 13], remove_edges=False)
-            band_sig_beta = filter_signal(xx[i][j], s_rate, 'bandpass', [13, 30], remove_edges=False)
-            extracted_sig[i, 0, j, :] = band_sig_delta
-            extracted_sig[i, 1, j, :] = band_sig_theta
-            extracted_sig[i, 2, j, :] = band_sig_alpha
-            extracted_sig[i, 3, j, :] = band_sig_beta
+            band_sig_delta = butter_bandpass_filter(xx[i][j], 1, 4, fs)
+            band_sig_theta = butter_bandpass_filter(xx[i][j], 4, 8, fs)
+            band_sig_alpha = butter_bandpass_filter(xx[i][j], 8, 13, fs)
+            band_sig_beta = butter_bandpass_filter(xx[i][j], 13, 30, fs)
+            extracted_sig[i, j, 0, :] = band_sig_delta
+            extracted_sig[i, j, 1, :] = band_sig_theta
+            extracted_sig[i, j, 2, :] = band_sig_alpha
+            extracted_sig[i, j, 3, :] = band_sig_beta
 
     return extracted_sig
