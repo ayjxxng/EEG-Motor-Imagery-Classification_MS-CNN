@@ -1,5 +1,5 @@
 # EEG-Motor-Imagery-Classification_MS-CNN
-Multi-scale CNN for MI-BCI classification. / This repository belongs to the Neuromatch project of NewLearn (Neuroscience Society of Korea University).
+Multi-scale CNN for MI-BCI classification. This repository belongs to the Neuromatch project of NewLearn (Neuroscience Society of Korea University).
 
 ## Note
 The model is based on "An efficient multi-scale CNN model with intrinsic feature integration for motor imagery EEG subject classification in brain-machine interfaces", but the specific code in this repository is authored by Neuromatch.
