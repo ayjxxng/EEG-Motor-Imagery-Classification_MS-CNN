@@ -30,65 +30,52 @@ def run_classification(train_data, DE_input, NPS_input, train_labels,
         y_train, y_test = train_labels[train_index], train_labels[test_index]
 
 
-        # CNN train
-        print('Training CNN ------------')
-        model_CNN = build_model_CNN()
-        hist_CNN = model_CNN.fit([x_train], y_train, validation_data=(x_test, y_test),
-                              batch_size=batch_size, epochs=epochs, verbose=1)
-        print(f"CNN_Fold{fold + 1}_loss: {hist_CNN.history['val_loss'][-1]:.4f}")
-        print(f"CNN_Fold{fold + 1}_accuracy: {hist_CNN.history['val_accuracy'][-1]:.4f}")
-
-
-        # model_0 train
+        # model_0:MSCNN train
         print('Training model_0 ------------')
-        model_0 = build_model_0()
+        model_0 = build_model(model="MSCNN")
         hist_0 = model_0.fit([x_train], y_train, validation_data=(x_test, y_test),
                               batch_size=batch_size, epochs=epochs, verbose=1)
         print(f"model_0_Fold{fold + 1}_loss: {hist_0.history['val_loss'][-1]:.4f}")
         print(f"model_0_Fold{fold + 1}_accuracy: {hist_0.history['val_accuracy'][-1]:.4f}")
 
 
-        # model_1 train
+        # model_1:MSCNN+DE train
         print('Training model_1 ------------')
-        model_1 = build_model_1()
+        model_1 = build_model(model="MSCNN+DE")
         hist_1 = model_1.fit([x_train, x_train_DE], y_train, validation_data=([x_test, x_test_DE], y_test),
                               batch_size=batch_size, epochs=epochs, verbose=1)
         print(f"model_1_Fold{fold + 1}_loss: {hist_1.history['val_loss'][-1]:.4f}")
         print(f"model_1_Fold{fold + 1}_accuracy: {hist_1.history['val_accuracy'][-1]:.4f}")
 
 
-        # model_2 train
+        # model_2:MSCNN+NPS train
         print('Training model_2  ------------')
-        model_2 = build_model_2()
+        model_2 = build_model(model="MSCNN+NPS")
         hist_2 = model_2.fit([x_train, x_train_NPS], y_train, validation_data=([x_test, x_test_NPS], y_test),
                              batch_size=batch_size, epochs=epochs, verbose=1)
         print(f"model_2_Fold{fold + 1}_loss: {hist_2.history['val_loss'][-1]:.4f}")
         print(f"model_2_Fold{fold + 1}_accuracy: {hist_2.history['val_accuracy'][-1]:.4f}")
 
 
-        # model_3 train
+        # model_3:MSCNN+all train
         print('Training model_3 ------------')
-        model_3 = build_model_3()
+        model_3 = build_model(model="MSCNN+all")
         hist_3 = model_3.fit([x_train, x_train_DE, x_train_NPS], y_train, validation_data=([x_test, x_test_DE, x_test_NPS], y_test),
                              batch_size=batch_size, epochs=epochs, verbose=1)
         print(f"model_3_Fold{fold + 1}_loss: {hist_3.history['val_loss'][-1]:.4f}")
         print(f"model_3_Fold{fold + 1}_accuracy: {hist_3.history['val_accuracy'][-1]:.4f}")
 
-
-
-    result_CNN, roc_CNN = validate_model_CNN(model_CNN, val_data, val_labels)
-    print(f"CNN Validation Loss: {result_CNN[0]:.4f}, CNN Validation Accuracy: {result_CNN[1]:.4f}, CNN Validation F1: {result_CNN[2]:.4f}")
-
-    result_0, roc_0 = validate_model_0(model_0, val_data, val_labels)
+    # validate
+    result_0, roc_0 = validate_model(model_0, val_data, val_labels)
     print(f"Model_0 Validation Loss: {result_0[0]:.4f}, Model_0 Validation Accuracy: {result_0[1]:.4f}, Model_0 Validation F1: {result_0[2]:.4f}")
 
-    result_1, roc_1 = validate_model_1(model_1, val_data, val_DE, val_labels)
+    result_1, roc_1 = validate_model(model_1, val_data, val_DE, val_labels)
     print(f"Model_1 Validation Loss: {result_1[0]:.4f}, Model_1 Validation Accuracy: {result_1[1]:.4f}, Model_1 Validation F1: {result_1[2]:.4f}")
 
-    result_2, roc_2 = validate_model_2(model_2, val_data, val_NPS, val_labels)
+    result_2, roc_2 = validate_model(model_2, val_data, val_NPS, val_labels)
     print(f"Model_2 Validation Loss: {result_2[0]:.4f}, Model_2 Validation Accuracy: {result_2[1]:.4f}, Model_2 Validation F1: {result_2[2]:.4f}")
 
-    result_3, roc_3 = validate_model_3(model_3, val_data, val_DE, val_NPS, val_labels)
+    result_3, roc_3 = validate_model(model_3, val_data, val_DE, val_NPS, val_labels)
     print(f"Model_3 Validation Loss: {result_3[0]:.4f}, Model_3 Validation Accuracy: {result_3[1]:.4f}, Model_3 Validation F1: {result_3[2]:.4f}")
 
-    return model_CNN, model_0, model_1, model_2, model_3, result_CNN, result_0, result_1, result_2, result_3, hist_CNN, hist_0, hist_1, hist_2, hist_3, roc_CNN, roc_0, roc_1, roc_2, roc_3
+    return model_0, model_1, model_2, model_3, result_0, result_1, result_2, result_3, hist_0, hist_1, hist_2, hist_3, roc_0, roc_1, roc_2, roc_3
