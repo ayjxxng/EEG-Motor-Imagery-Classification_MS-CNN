@@ -2,6 +2,7 @@ import tensorflow as tf
 from keras.models import Model
 from keras.layers import Dense, Input, Dropout, Flatten, Conv1D, Conv2D, MaxPooling2D, Concatenate
 from keras.optimizers import SGD
+from sklearn.metrics import roc_curve, auc, f1_score
 
 
 def MSCBBlock(block_input):
@@ -101,3 +102,28 @@ def build_model(model = 'MSCNN'):
     optimizer = SGD(learning_rate=lr_schedule)
     model.compile(loss='binary_crossentropy', optimizer=optimizer, metrics=['accuracy'])
     return model
+
+
+def validate_model(model, val_data, val_DE = None, val_NPS = None, val_labels):
+
+  val_input = [val_data]
+  if val_DE is not None:
+    val_input.append(val_DE)
+  if val_NPS is not None:
+    val_input.append(val_NPS)
+
+    # validation
+    y_pred = model.predict(val_input)
+    y_pred_classes = np.argmax(y_pred, axis=1)
+    y_true_classes = np.argmax(val_labels, axis=1)
+
+    loss, accuracy = model.evaluate(val_input, val_labels)
+    f1 = f1_score(y_true_classes, y_pred_classes)
+
+    # ROC curve calculation
+    fpr, tpr, thresholds = roc_curve(y_true_classes, y_pred[:, 1])
+    roc_auc = auc(fpr, tpr)
+    result = [loss, accuracy, f1]
+    roc = [fpr, tpr, roc_auc]
+
+    return result, roc
